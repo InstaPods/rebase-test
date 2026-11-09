@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "rebase": {
+            "command": "pnpm",
+            "args": ["exec", "rebase-mcp"],
+            "env": {
+                "REBASE_PROJECT_DIR": "."
+            }
+        }
+    }
+}

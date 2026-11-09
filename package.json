@@ -1,0 +1,51 @@
+{
+    "name": "my-app",
+    "version": "1.0.0",
+    "description": "Rebase application with PostgreSQL backend",
+    "private": true,
+    "type": "module",
+    "workspaces": [
+        "frontend",
+        "backend",
+        "config"
+    ],
+    "scripts": {
+        "dev": "rebase dev",
+        "build": "rebase build",
+        "start": "rebase start",
+        "db:generate": "rebase db generate",
+        "db:migrate": "rebase db migrate",
+        "schema:introspect": "rebase schema introspect",
+        "db:push": "rebase db push",
+        "schema:generate": "rebase schema generate",
+        "generate:sdk": "rebase generate-sdk",
+        "skills:install": "rebase skills install",
+        "example": "tsx scripts/example.ts",
+        "deploy": "rebase cloud deploy"
+    },
+    "devDependencies": {
+        "@rebasepro/cli": "0.28.2",
+        "@rebasepro/mcp": "0.28.2",
+        "@rebasepro/types": "0.28.2",
+        "@types/node": "^22.19.4",
+        "tsx": "^4.20.6",
+        "typescript": "^6.0.3"
+    },
+    "dependencies": {
+        "@rebasepro/client": "0.28.2",
+        "dotenv": "^17.4.2"
+    },
+    "engines": {
+        "node": ">=22.22.0"
+    },
+    "pnpm": {
+        "onlyBuiltDependencies": [
+            "esbuild",
+            "sharp",
+            "@ariga/atlas"
+        ]
+    },
+    "allowScripts": {
+        "@ariga/atlas": true
+    }
+}

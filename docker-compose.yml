@@ -1,0 +1,174 @@
+# ─── Self-hosting this project ───────────────────────────────────────
+#
+# Two containers: PostgreSQL, and the Rebase runtime with your built project
+# mounted into it. There is no application image to build here — the runtime is
+# the same published image every Rebase deployment runs, and your project
+# travels as a bundle.
+#
+# That is the point: the artifact you self-host is the artifact Rebase Cloud
+# runs. Nothing about this repository changes when you move between them; only
+# the destination does, and that lives in `.rebase/cloud.json`, which is not
+# committed.
+#
+#   rebase build              # produces ./dist-bundle
+#   docker compose up -d db
+#   docker compose up         # boot creates the tables it is missing
+#
+# `rebase db push` is the separate step for what boot deliberately leaves
+# alone: any change that is not purely additive.
+#
+# One container then serves the API at /api and the admin at / — same origin, so
+# there is no CORS to configure between them and no second web server.
+#
+# For development, use `rebase dev` instead.
+#
+# This file is the recommended one for a scaffolded project: it is in your
+# repository, `rebase init` filled in its secrets, its first admin account and
+# its pinned runtime version, and it is booted by the framework's own acceptance
+# gate on every push. The copy in the Rebase repository
+# (`infra/docker/docker-compose.selfhost.yml`) is the reference for a deployment
+# with no scaffold behind it, and adds a pgbouncer profile and the split-process
+# shapes. The two agree on every environment variable except the database
+# password: this file reads DATABASE_PASSWORD, which `rebase init` also embeds
+# in the DATABASE_URL in your .env; that one reads POSTGRES_PASSWORD, generated
+# by its own quickstart script.
+#
+# To upgrade Rebase, change REBASE_VERSION and restart. Your bundle is untouched.
+# To run your OWN server code instead, `rebase eject` — it writes the entrypoint,
+# a Dockerfile and a compose file that builds them.
+# ─────────────────────────────────────────────────────────────────────
+
+name: my-app
+
+services:
+  # ── PostgreSQL ───────────────────────────────────────────────────────
+  db:
+    # pgvector's image rather than the plain `postgres:18-alpine`: it is the
+    # official Postgres image with the `vector` extension already built in, on
+    # the same major. A `{ type: "vector" }` property compiles to `VECTOR(n)`,
+    # which a stock Postgres answers with `type "vector" does not exist` — a
+    # boot failure whose cause is an image, not a config. Nothing here installs
+    # extensions on your behalf, so the image is where that decision lives.
+    #
+    # Swapping this for `postgres:18-alpine` is safe on the same major if you
+    # never declare a vector property.
+    image: pgvector/pgvector:pg18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rebase_app
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-changeme}
+      POSTGRES_DB: rebase
+    # Published so `rebase db push` can reach it from the host. Remove this
+    # mapping once the schema is in place if the database should not be
+    # reachable from outside the compose network.
+    ports:
+      - "5557:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      # The runtime must not start before the database can answer, or its first
+      # boot fails on a connection refused and the container restarts for no
+      # reason a reader would understand.
+      test: ["CMD-SHELL", "pg_isready -U rebase_app -d rebase"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "max_connections=100"
+      - "-c"
+      - "work_mem=4MB"
+      - "-c"
+      - "effective_cache_size=768MB"
+      - "-c"
+      - "log_min_duration_statement=1000"
+
+  # ── The Rebase runtime, booting your bundle ──────────────────────────
+  api:
+    image: rebasepro/server:${REBASE_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      DATABASE_URL: postgresql://rebase_app:${DATABASE_PASSWORD:-changeme}@db:5432/rebase?options=-c%20search_path%3Dpublic
+      ADMIN_CONNECTION_STRING: postgresql://rebase_app:${DATABASE_PASSWORD:-changeme}@db:5432/rebase?options=-c%20search_path%3Dpublic
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env — `rebase init` generates one}
+      REBASE_SERVICE_KEY: ${REBASE_SERVICE_KEY:?set REBASE_SERVICE_KEY in .env — `rebase init` generates one}
+      NODE_ENV: production
+      PORT: "3001"
+
+      # The origins a browser will load the admin from. With the admin folded
+      # into the bundle it is served from this very container, so this is just
+      # your own address — but it is still required, because an API that guesses
+      # its allowed origins is one that eventually allows the wrong one.
+      CORS_ORIGINS: ${CORS_ORIGINS:?set CORS_ORIGINS to the origin you browse to, e.g. http://localhost:3001}
+
+      # ─── The first account ───────────────────────────────────────────────
+      #
+      # This service runs with NODE_ENV=production, and in production the
+      # first-registration-becomes-admin window is CLOSED. That window is right
+      # for a laptop, where the person at the keyboard is the operator, and
+      # wrong the moment this stack answers on a hostname: the container is
+      # serving before you have typed anything, so whoever reaches the sign-up
+      # form first would own the deployment.
+      #
+      # So the first admin is named here instead. The runtime creates it once,
+      # while the user table is empty, and does nothing on every boot after
+      # that — nothing is left to be claimed, and nothing to race for.
+      #
+      # `rebase init` wrote both into .env with a generated password. Change
+      # the email to yours, sign in, and change the password.
+      REBASE_ADMIN_EMAIL: ${REBASE_ADMIN_EMAIL:?set REBASE_ADMIN_EMAIL in .env — `rebase init` writes one}
+      REBASE_ADMIN_PASSWORD: ${REBASE_ADMIN_PASSWORD:?set REBASE_ADMIN_PASSWORD in .env — `rebase init` generates one, min 12 characters}
+      # Open sign-up instead: set this to false in .env and clear the two above
+      # — but then the first person to reach the form becomes the administrator.
+      DISABLE_SELF_REGISTRATION: ${DISABLE_SELF_REGISTRATION:-true}
+
+      # `ensure` (the default) creates missing tables and columns at boot —
+      # your collections' as well as auth's — with their row-level security,
+      # and is additive only: nothing is dropped, narrowed or rewritten,
+      # because that must never happen as a side effect of a container restart.
+      #
+      # `rebase db push` is still what applies the rest: any change that is not
+      # purely additive.
+      # Set this to `none` to leave your collections' schema alone; auth's
+      # tables are still kept current. REBASE_PROVISION=false changes nothing
+      # in the database at all.
+      REBASE_MIGRATE_ON_BOOT: ${REBASE_MIGRATE_ON_BOOT:-ensure}
+      REBASE_PROVISION: ${REBASE_PROVISION:-true}
+
+      # Uploads land on the named volume below, which survives restarts. That is
+      # the case FORCE_LOCAL_STORAGE exists to acknowledge — without a durable
+      # mount the server refuses local storage in production, because the
+      # container filesystem is destroyed on the next deploy and every uploaded
+      # file goes with it. Switch to STORAGE_TYPE=s3 or gcs and drop both lines
+      # if you move storage off-box.
+      #
+      # The volume is mounted at /storage, one level above STORAGE_PATH, because
+      # every bucket you declare in config/resources.ts gets a directory beside
+      # this one: bucket("media") is /storage/uploads__media. Mounted at
+      # /storage/uploads itself, the volume would hold the default bucket only,
+      # and every other bucket's files would go with the container.
+      STORAGE_PATH: /storage/uploads
+      FORCE_LOCAL_STORAGE: "true"
+    volumes:
+      # Your built project. `rebase build` installs its declared dependencies
+      # into the bundle by default, so `node_modules` is already there and the
+      # mount can be read-only — a compromised hook then cannot rewrite the code
+      # that runs after it. Drop the `:ro` if you build with `--no-vendor`: the
+      # runtime installs at every start instead, and needs to write here.
+      - ./dist-bundle:/bundle:ro
+      - storage:/storage
+
+volumes:
+  postgres_data:
+    driver: local
+  storage:
+    driver: local

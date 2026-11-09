@@ -1,0 +1,33 @@
+packages:
+  - "frontend"
+  - "backend"
+  - "config"
+linkWorkspacePackages: true
+# Without this, pnpm takes a higher version from the registry over a workspace
+# package on a "*" range, and this project's own package names are free for
+# anyone to publish.
+preferWorkspacePackages: true
+blockExoticSubdeps: false
+minimumReleaseAge: 0
+# Both of these used to live in `.npmrc` as `verify-deps-before-run` and
+# `confirm-modules-purge`. pnpm 11 does not read them from there any more —
+# `pnpm config get verify-deps-before-run` answers `undefined` with the .npmrc
+# in place, and `verifyDepsBeforeRun` here answers `false` — so the settings had
+# quietly stopped applying. npm 12 meanwhile warns about both on every install
+# and every `npm run`, saying they will stop working.
+verifyDepsBeforeRun: false
+# Refuse to install on a Node older than `engines.node` in package.json.
+#
+# Off by default, in every package manager, which is why the floor this
+# scaffold declares was enforced by nothing: pnpm 11 installs a project whose
+# `engines.node` is `>=99.0.0` and exits 0, and npm prints EBADENGINE and also
+# exits 0. So a first run on Node 20 said nothing at all, and the first sign was
+# a syntax error from inside a dependency. `engine-strict=true` in npmrc is the
+# same setting for npm.
+engineStrict: true
+confirmModulesPurge: false
+allowBuilds:
+  esbuild: true
+  sharp: true
+  "@ariga/atlas": true
+

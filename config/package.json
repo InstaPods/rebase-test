@@ -1,0 +1,30 @@
+{
+  "name": "my-app-config",
+  "version": "1.0.0",
+  "description": "Shared collections for frontend and backend",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc && rebase normalize-imports dist",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@rebasepro/cms-types": "0.28.2",
+    "@rebasepro/types": "0.28.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.4",
+    "typescript": "^6.0.3"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  }
+}

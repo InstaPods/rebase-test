@@ -1,0 +1,98 @@
+/**
+ * Example Rebase Script
+ *
+ * Scripts run OUTSIDE the server and need explicit authentication. This one
+ * sends the project's service key as a Bearer token, which the API treats as
+ * admin — similar to a Service Account credential. `rebase init` already wrote
+ * one into .env as REBASE_SERVICE_KEY, and the dev server reads the same file,
+ * so there is nothing to set up.
+ *
+ * Usage:
+ *   # With local dev server running (`pnpm dev` in another terminal):
+ *   npx tsx scripts/example.ts
+ *
+ *   # Against another backend, with that backend's own REBASE_SERVICE_KEY:
+ *   REBASE_SERVICE_KEY=<its key> REBASE_URL=https://api.yourdomain.com npx tsx scripts/example.ts
+ *
+ * To replace the key, put a new one in .env and restart the server:
+ *   node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
+ */
+
+import fs from "node:fs";
+import path from "node:path";
+import * as dotenv from "dotenv";
+import { createRebaseClient } from "@rebasepro/client";
+// Optional: fully typed collections. `rebase dev` writes these under
+// ./generated/sdk (`rebase generate-sdk` outside it) — the dictionary is what
+// maps a hyphenated slug to the property name, so a client built without it
+// 404s at runtime.
+// import { collectionsDictionary, type Database } from "../generated/sdk/database.types";
+
+// Load .env from project root (same file the backend uses)
+// `quiet`: dotenv 17 otherwise prints its own advertisement banner.
+dotenv.config({ path: path.resolve(process.cwd(), ".env"), quiet: true });
+
+// ─── Resolve Backend URL ─────────────────────────────────────────────
+let baseUrl = process.env.REBASE_URL;
+
+if (!baseUrl) {
+    try {
+        // Try to read the URL from the local dev server
+        const urlFile = path.join(process.cwd(), ".rebase-dev-url");
+        if (fs.existsSync(urlFile)) {
+            baseUrl = fs.readFileSync(urlFile, "utf-8").trim();
+            console.log(`Found local dev server running at: ${baseUrl}`);
+        }
+    } catch (e) {
+        // Ignore errors reading the file
+    }
+}
+
+if (!baseUrl) {
+    console.error("❌ No backend URL found!");
+    console.error("");
+    console.error("Please make sure you have either:");
+    console.error("1. Started the local dev server in another terminal (`pnpm dev`)");
+    console.error("2. Set the REBASE_URL environment variable (e.g. `REBASE_URL=https://api.yourdomain.com npx tsx scripts/example.ts`)");
+    process.exit(1);
+}
+
+// ─── Resolve Service Key ─────────────────────────────────────────────
+const serviceKey = process.env.REBASE_SERVICE_KEY;
+
+if (!serviceKey) {
+    console.warn("⚠️  No REBASE_SERVICE_KEY found — requests will be unauthenticated.");
+    console.warn("   Set REBASE_SERVICE_KEY in your .env to get admin access.");
+    console.warn("   Generate one with: node -e \"console.log(require('crypto').randomBytes(48).toString('base64'))\"");
+    console.warn("");
+}
+
+// ─── Initialize the SDK client ───────────────────────────────────────
+const rebase = createRebaseClient({
+    baseUrl,
+    // The service key is sent as a Bearer token for admin access
+    token: serviceKey
+});
+
+async function run() {
+    console.log("🚀 Starting script...");
+
+    try {
+        // Example: Check backend health
+        const res = await fetch(`${baseUrl}/health`);
+        const health = res.headers.get("content-type")?.includes("application/json")
+            ? await res.json()
+            : { status: res.status, text: await res.text() };
+        console.log("✅ Backend health:", health);
+
+        // Example: Fetch some data (requires auth if backend is secure-by-default)
+        // const items = await rebase.data.collection("users").find({ limit: 5 });
+        // console.log("Items:", items);
+
+        console.log("✨ Script finished successfully.");
+    } catch (error) {
+        console.error("❌ Script failed:", error);
+    }
+}
+
+run();

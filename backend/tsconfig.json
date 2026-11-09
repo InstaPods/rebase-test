@@ -1,0 +1,55 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    // The program includes `../config/**`, so tsc's common source directory is
+    // the project root and the emit already lands at `dist/backend/src/…` —
+    // which is what `scripts.start` runs. Saying so explicitly is required from
+    // TypeScript 6, which refuses to infer it (TS5011), and changes nothing
+    // about the layout.
+    "rootDir": "..",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "sourceMap": true,
+    "jsx": "preserve",
+    // Pin the ambient type libraries.
+    //
+    // Unset, TypeScript sweeps every `node_modules/@types` it can reach and
+    // treats each folder as an implicit type library. Under pnpm that reaches
+    // the virtual store, where packages hoisted for peer resolution live —
+    // `dompurify` among them, pulled in transitively by the admin editor. The
+    // backend has no dependency on it and cannot resolve its entry point, so
+    // `rebase build` failed the whole bundle with:
+    //
+    //     error TS2688: Cannot find type definition file for 'dompurify'
+    //
+    // `frontend/tsconfig.json` has always pinned its own list, which is why the
+    // frontend never saw this. Naming what this program needs is both the fix
+    // and the faster compile.
+    "types": ["node"]
+  },
+  // `functions/` is included so `tsc` actually checks your custom routes. It
+  // was omitted here (the baas flavour has always had it), which meant the one
+  // place you write server code by hand was the one place a type error went
+  // unnoticed until runtime. The inferred common root is already the project
+  // root because of `../config`, so this adds no `rootDir` and moves nothing
+  // that dist/ already contains.
+  //
+  // `crons/` for the same reason, and for one more: `rebase build` compiles it
+  // through a generated tsconfig, but an ejected project builds with *this*
+  // file — so leaving crons out meant an ejected server had no compiled jobs to
+  // load and stopped running every schedule, nightly backups included.
+  //
+  // `scripts/` because that is where the Scripts page puts a script that opens
+  // the project with `openRebase`: typed by the same `Database` as a function,
+  // which only holds if `tsc` reads it.
+  "include": ["src/**/*", "functions/**/*", "crons/**/*", "scripts/**/*", "../config/**/*", "drizzle.config.ts"]
+}
