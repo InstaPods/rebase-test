@@ -1,8 +1,8 @@
-# Astro SSR on Node (InstaPods example)
+# Astro SSR example
 
-Minimal Astro 5 site using `@astrojs/node` in `standalone` mode.
+A minimal Astro 5 site. `/` renders on every request and `/api/time` returns JSON.
 
-- `/` renders on every request (prints the request time)
-- `/api/time` is a JSON API route
-
-`npm run build` emits `dist/server/entry.mjs`; `node dist/server/entry.mjs` serves it. The server reads `HOST` and `PORT` from the environment.
+```sh
+npm install
+npm run dev
+```
