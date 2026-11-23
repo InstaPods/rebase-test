@@ -1,0 +1,15 @@
+---
+// Rendered on every request (output: 'server').
+const now = new Date().toISOString();
+const id = crypto.randomUUID();
+---
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Astro SSR on InstaPods</title></head>
+  <body>
+    <h1>Astro SSR on Node</h1>
+    <p>Rendered at <time id="rendered-at">{now}</time></p>
+    <p>Request id: <code id="request-id">{id}</code></p>
+    <p>Node {process.version}</p>
+    <p><a href="/api/time">/api/time</a></p>
+  </body>
+</html>
